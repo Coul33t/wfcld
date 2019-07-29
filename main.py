@@ -2,17 +2,16 @@ import numpy as np
 from PIL import Image
 import random as rn
 import itertools
+from math import log
 
 DEBUG = False
 
 offsets = {'top': (0, -1), 
-		   'top-right': (1, -1),
 		   'right': (1, 0),
-		   'bottom-right': (1, 1),
 		   'bottom': (0, 1),
-		   'bottom-left': (-1, 1),
-		   'left': (-1, 0),
-		   'top-left': (-1, -1)}
+		   'left': (-1, 0)}
+
+GIF = []
 
 class MyImage:
 	def __init__(self, path_to_img):
@@ -41,15 +40,12 @@ class MyImage:
 class Pixel:
 	def __init__(self, value):
 		self.value = value
-		self.neighbors = {'top': [], 
-						  'top-right': [],
+		self.neighbors = {'top': [],
 						  'right': [],
-						  'bottom-right': [],
 						  'bottom': [],
-						  'bottom-left': [],
-						  'left': [],
-						  'top-left': []}
+						  'left': []}
 		self.proba = -1
+		self.weight = -1
 
 	def add_neighbors(self, neighbors_dict):
 		for k,v in neighbors_dict.items():
@@ -75,14 +71,11 @@ class Constraints:
 					# We try to find an existing pixel in the neighbor list	
 					for n_pixel in pixel_in_list.neighbors[k]:
 						if n_pixel.value == v[0].value:
-							n_pixel.proba += 1
+							n_pixel.weight += 1
 							break
 					# If we didn't find it, we add a new one
 					else:
 						pixel_in_list.neighbors[k].append(v[0])
-
-					
-
 
 	def occurences_to_probabilities(self):
 		for current_pixel in self.pixels_list:
@@ -90,20 +83,16 @@ class Constraints:
 				
 				cum_sum = 0
 				for pixel in pixel_list:
-					cum_sum += pixel.proba
+					cum_sum += pixel.weight
 
 				for pixel in pixel_list:
-					pixel.proba = pixel.proba / cum_sum
+					pixel.proba = pixel.weight / cum_sum
 
 	def get_neighbors(self, origin_x, origin_y):
 		neighbors_dict = {'top': [], 
-						  'top-right': [],
 						  'right': [],
-						  'bottom-right': [],
 						  'bottom': [],
-						  'bottom-left': [],
-						  'left': [],
-						  'top-left': []}
+						  'left': []}
 
 		x_val = []
 		y_val = []
@@ -126,23 +115,14 @@ class Constraints:
 				if not (x == 0 and y == 0):
 					if x == 0 and y == -1:
 						neighbors_dict['top'] = Pixel(self.img.array[origin_y + y][origin_x + x])
-					elif x == 1 and y == -1:
-						neighbors_dict['top-right'] = Pixel(self.img.array[origin_y + y][origin_x + x])
 					elif x == 1 and y == 0:
 						neighbors_dict['right'] = Pixel(self.img.array[origin_y + y][origin_x + x])
-					elif x == 1 and y == 1:
-						neighbors_dict['bottom-right'] = Pixel(self.img.array[origin_y + y][origin_x + x])
 					elif x == 0 and y == 1:
 						neighbors_dict['bottom'] = Pixel(self.img.array[origin_y + y][origin_x + x])
-					elif x == -1 and y == 1:
-						neighbors_dict['bottom-left'] = Pixel(self.img.array[origin_y + y][origin_x + x])
 					elif x == -1 and y == 0:
 						neighbors_dict['left'] = Pixel(self.img.array[origin_y + y][origin_x + x])
-					elif x == -1 and y == -1:
-						neighbors_dict['top-left'] = Pixel(self.img.array[origin_y + y][origin_x + x])
 
 		return neighbors_dict
-
 
 	def build_constraints(self):
 		for y, rows in enumerate(self.img.array):
@@ -156,13 +136,11 @@ class Constraints:
 
 	def get_lowest_entropy(self, possibilities_array):
 		lowest_entropy = len(self.pixels_list) + 1
-		x_lowest = -1
-		y_lowest = -1
 		possible_cells = []
-		
-		for x, rows in enumerate(possibilities_array):
-			for y, col in enumerate(rows):
-				
+
+		for row_idx, rows in enumerate(possibilities_array):
+			for col_idx, col in enumerate(rows):
+
 				if col == 'Collapsed':
 					continue
 
@@ -173,18 +151,18 @@ class Constraints:
 							print(f'Current cell entropy: {current_cell_entropy} (vs {lowest_entropy})')
 					if current_cell_entropy < lowest_entropy:
 						if DEBUG:
-							print(f'New lowest entropy ({possibilities_array[x][y]})')
+							print(f'New lowest entropy ({possibilities_array[row_idx][col_idx]})')
 						possible_cells.clear()
-						possible_cells.append((x, y))
+						possible_cells.append((row_idx, col_idx))
 						lowest_entropy = current_cell_entropy
 					elif current_cell_entropy == lowest_entropy:
 						if DEBUG:
-							print(f'Same entropy ({possibilities_array[x][y]})')
-						possible_cells.append((x, y))
+							print(f'Same entropy ({possibilities_array[row_idx][col_idx]})')
+						possible_cells.append((row_idx, col_idx))
 					else:
 						if DEBUG:
 							print('Higher entropy')
-		
+
 		if len(possible_cells) > 1:
 			return rn.choice(possible_cells)
 		elif len(possible_cells) == 1:
@@ -199,12 +177,13 @@ class Constraints:
 		for k, v in cell.neighbors.items():
 			new_x = x + offsets[k][0]
 			new_y = y + offsets[k][1]
+
 			if (v != [] 
 			and new_y < len(possibilities_array)
 			and new_x < len(possibilities_array[0])
-			and possibilities_array[new_x][new_y] != 'Collapsed'):
-				possibilities_array[new_x][new_y] = [x for x in possibilities_array[new_x][new_y] if x.value in [yo.value for yo in v]]
-				if possibilities_array[new_x][new_y] == []:
+			and possibilities_array[new_y][new_x] != 'Collapsed'):
+				possibilities_array[new_y][new_x] = [x for x in possibilities_array[new_y][new_x] if x.value in [yo.value for yo in v]]
+				if possibilities_array[new_y][new_x] == []:
 					return False
 
 		return True
@@ -213,36 +192,44 @@ class Constraints:
 		
 		possibilities_array = [[self.pixels_list for x in range(output_w)] for y in range(output_h)]
 		tmp_new_image = [[None for x in range(output_w)] for y in range(output_h)]
+		idx = 0
 		
 		while True:
 			
-			coordinates = self.get_lowest_entropy(possibilities_array)
+			row_col = self.get_lowest_entropy(possibilities_array)
 
 			if any(x == [] for x in itertools.chain(*possibilities_array)):
 				breakpoint()
 			
-			if coordinates is None:
+			if row_col is None:
 				no_contradiction = False
 
 			else:
-				try:
-					chosen_cell = rn.choices(population=possibilities_array[coordinates[0]][coordinates[1]],
-											 weights=[x.proba for x in possibilities_array[coordinates[0]][coordinates[1]]])[0]
-				except:
-					breakpoint()
-				tmp_new_image[coordinates[0]][coordinates[1]] = chosen_cell.value
+				chosen_cell = rn.choices(population=possibilities_array[row_col[0]][row_col[1]],
+										 weights=[x.proba for x in possibilities_array[row_col[0]][row_col[1]]])[0]
+				print(f'{chosen_cell.value}')
+				tmp_new_image[row_col[0]][row_col[1]] = chosen_cell.value
 
-				if not self.propagate(chosen_cell, coordinates, possibilities_array):
+				if not self.propagate(chosen_cell, row_col, possibilities_array):
 					print('Contradiction reached: aborted.')
 					return None
 
-				possibilities_array[coordinates[0]][coordinates[1]] = 'Collapsed'
+				possibilities_array[row_col[0]][row_col[1]] = 'Collapsed'
+				self.export_tmp_image(tmp_new_image, idx)
+				idx += 1
 
 				if all(x == 'Collapsed' for x in itertools.chain(*possibilities_array)):
 					print('Done!')
 					break
 
 		return tmp_new_image
+
+	def export_tmp_image(self, img, idx):
+		for r, row in enumerate(img):
+			for c, col in enumerate(row):
+				if not col:
+					img[r][c] = [255,0,128]
+		GIF.append(Image.fromarray(np.array(img).astype(np.uint8)))
 
 if __name__ == '__main__':
 	print('Importing image')
@@ -254,10 +241,11 @@ if __name__ == '__main__':
 	if constraints:
 		for i in range(20):
 			print('Building new image')
-			new_img = constraints.build_new(16,16)
+			new_img = constraints.build_new(32,8)
 			if new_img:
 				break
 
+	GIF[0].save('result.gif', format='GIF', append_images=GIF[1:], save_all=True, duration=100, loop=0)
 	if new_img:
 		img = Image.fromarray(np.array(new_img))
 		img.show()
