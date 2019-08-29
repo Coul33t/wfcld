@@ -146,6 +146,9 @@ class Constraints:
 
         return row_col
 
+    def propagate(self, chosen_cell, row_col, possibilities_array):
+        pass
+
     def create_new_image(self, output_size):
         if not (output_size[0] / self.block_x).is_integer() or not (output_size[1] / self.block_y).is_integer():
             print(f'ERROR: please specify an output size that is a multiple of the blocks size.')
@@ -153,18 +156,21 @@ class Constraints:
             return
 
         possibilities_array = [[self.blocks_list for x in range(int(output_size[1] / self.block_y))] for y in range(int(output_size[0] / self.block_x))]
-        tmp_image = np.zeros(shape=output_size)
+        new_image = np.zeros(shape=output_size)
 
         contradiction = False
-        first = True
 
         while not contradiction:
-            if first == True:
-                first = False
+            row_col = self.select_lower_entropy(possibilities_array)
 
-            else:
-                row_col = self.select_lower_entropy(possibilities_array)
-                breakpoint()
+            chosen_cell = rn.choices(population=possibilities_array[row_col[0]][row_col[1]],
+                                        weights=[x.probability for x in possibilities_array[row_col[0]][row_col[1]]])[0]
+            new_image[row_col[0]][row_col[1]] = chosen_cell.value
+
+            if not self.propagate(chosen_cell, row_col, possibilities_array):
+                    print('Contradiction reached: aborted.')
+                    return None
+            breakpoint()
 
 
 
