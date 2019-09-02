@@ -400,7 +400,7 @@ def main(args):
         cons.gif_array = []
 
         new_image = cons.create_new_image((8,8))
-        breakpoint()
+
         if cons.gif_array:
             cons.gif_array[0].save('process.gif', format='GIF', append_images=cons.gif_array[1:], save_all=True, duration=100, loop=0)
 
