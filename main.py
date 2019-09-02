@@ -1,3 +1,5 @@
+# Commente ton putain de code
+
 import numpy as np
 from PIL import Image
 import random as rn
