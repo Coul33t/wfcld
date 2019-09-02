@@ -1,6 +1,8 @@
 # wfcld
 Wavefunction collapsing, yay!
 
+`main2.py` is the one you should use. `main.py` was using a one-tiled model, and it didn't even work. I re-did the whole thing in `main2.py`, and it shall replace main.py in the near future.
+
 Todo:
 * Test if it's really working (spoiler: I think it does not)
 
