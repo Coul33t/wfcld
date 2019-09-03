@@ -6,6 +6,7 @@ Wavefunction collapsing, yay!
 Todo:
 * Test if it's really working (update: maybe it actually works?)
 * Data visualisation in a GUI : every blocks and every possible neighbors + probabilities (simplify debugging a lot)
+* Extensive testing of the submatrix matching algorithm there's probably a problem coming from here)
 
 Done:
 * Right entropy computation -> What is right, what is wrong, who am I?
