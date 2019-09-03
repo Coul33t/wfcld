@@ -129,11 +129,11 @@ class Constraints:
         if i > 0:
             neighbors_dict['top'] = Block(self.original_image.img[[i-1], j:j+self.block_x])
         if i < self.original_image.h - self.block_y:
-            neighbors_dict['bottom'] = Block(self.original_image.img[[i+self.block_y], j:j+self.block_x])
+            neighbors_dict['bottom'] = Block(self.original_image.img[[i+self.block_y-1], j:j+self.block_x])
         if j > 0:
             neighbors_dict['left'] = Block(self.original_image.img[i:i+self.block_y, [j-1]])
         if i < self.original_image.w - self.block_x:
-            neighbors_dict['right'] = Block(self.original_image.img[i:i+self.block_y, [j+self.block_x]])
+            neighbors_dict['right'] = Block(self.original_image.img[i:i+self.block_y, [j+self.block_x-1]])
 
         return neighbors_dict
 
@@ -158,6 +158,8 @@ class Constraints:
 
     def compute_entropy(self, i, j, possibilities_array):
         """
+            CURRENTLY UNUSED (because it makes the algorithm systematically
+            select the corners first, then the borders, etc.)
             Computes the entropy for a cell. It uses the following formula:
             cell_entropy = current_cell_entropy +
                            top_cell_entropy +
@@ -195,7 +197,8 @@ class Constraints:
                 if possibilities_array[i][j] == "COLLAPSED":
                     continue
 
-                current_entropy = self.compute_entropy(i, j, possibilities_array)
+                # current_entropy = self.compute_entropy(i, j, possibilities_array)
+                current_entropy = len(possibilities_array[i][j])
 
                 if current_entropy < lowest_entropy:
                     lowest_entropy = current_entropy
@@ -212,6 +215,13 @@ class Constraints:
         #     print('new matrixes to test')
         #     print(f'Matrix = {matrix}')
         #     print(f'Submatrix = {submatrix}')
+
+        # Matrix is [[[]]] at first, need to be [[]]
+        # TODO: better explanation
+        if submatrix.shape[0] == 1:
+            submatrix = submatrix[0]
+        elif submatrix.shape[1] == 1:
+            submatrix = submatrix[:,0]
 
         if direction == 'top':
             if np.array_equal(matrix[-1,:], submatrix):
@@ -241,6 +251,8 @@ class Constraints:
         if self.debug:
             print('-----------\nPropagation\n-----------')
 
+        total_legal_blocks = []
+
         for k, v in chosen_cell.neighbors.items():
 
             new_x = x + offsets[k][0]
@@ -254,21 +266,24 @@ class Constraints:
                 legal_blocks = []
                 for possible_block in possibilities_array[new_y][new_x]:
                     for neigh in v:
-                        if self.compare_matrix_to_submatrix(k, possible_block.value, neigh.value[0]):
+                        if self.compare_matrix_to_submatrix(k, possible_block.value, neigh.value):
                             legal_blocks.append(possible_block)
 
                     # if compare_matrix_to_submatrix(k, , v[0].value, possible_block.value):
                     #     legal_blocks.append(possible_block)
 
                 if self.debug:
-                    print(f'Legal blocks number: {len(legal_blocks)}')
+                    print(f'Legal blocks number for {k}: {len(legal_blocks)}')
 
-                # Contradiction reached
                 if not legal_blocks:
                     return False
 
+                total_legal_blocks.extend(legal_blocks)
+
                 possibilities_array[new_y][new_x] = legal_blocks
 
+        if not total_legal_blocks:
+            return False
         return True
 
     def create_new_image(self, output_size):
@@ -279,6 +294,7 @@ class Constraints:
             failed.
         """
 
+        print('Creating new image')
         # If the size of the output image isn't a multiple (in both x and y)
         # of the blocks size, abort.
         # TODO: change the size of the output image so that it matches the closest
@@ -297,8 +313,7 @@ class Constraints:
         # possibilities_array:
         #     - posibilities_array has one cell for one block
         #     - new_image has one cell for one pixel
-        self.new_image = np.full(shape=(output_size[0], output_size[1], 3), fill_value=-1)
-
+        self.new_image = np.full(shape=(output_size[0], output_size[1], 3), fill_value=[255,0,128])
         counter = 0
 
         while True:
@@ -318,20 +333,21 @@ class Constraints:
                 print(f'Chosen cell: {chosen_cell.value}')
 
             # Put this block into the new image
-            self.new_image[row_col[0]*self.block_x:row_col[0]*self.block_x+self.block_x,row_col[1]*self.block_y:row_col[1]*self.block_y+self.block_y] = chosen_cell.value
-
-            # Unlucky boi
-            if not self.propagate(chosen_cell, row_col, possibilities_array):
-                print('Contradiction reached: aborted.')
-                return False
+            self.new_image[row_col[0]*self.block_x:row_col[0]*self.block_x+self.block_x,
+                           row_col[1]*self.block_y:row_col[1]*self.block_y+self.block_y] = chosen_cell.value
 
             possibilities_array[row_col[0]][row_col[1]] = 'COLLAPSED'
-
             self.export_tmp_image(self.new_image, counter - 1)
 
             if all(x == 'COLLAPSED' for x in itertools.chain(*possibilities_array)):
                 print('Done!')
                 break
+
+            # Unlucky boi
+            if not self.propagate(chosen_cell, row_col, possibilities_array):
+                print('Contradiction reached: aborted.')
+                return counter
+
 
         return True
 
@@ -340,7 +356,6 @@ class Constraints:
             for c, col in enumerate(row):
                 if np.array_equal(col, [-1,-1,-1]):
                     img[r][c] = [255,0,128]
-        print("to gif")
         self.gif_array.append(Image.fromarray(img.astype(np.uint8)))
 
     def display_blocks_list(self):
@@ -387,8 +402,9 @@ class Constraints:
 def main(args):
     print('Importing image')
 
-    cons = Constraints(2, 2, path_to_img="test3.png", debug=args.debug)
+    cons = Constraints(2, 2, path_to_img="test_images/subtest1.png", debug=args.debug)
 
+    print('Building constraints')
     for i in range(cons.original_image.h - cons.block_y + 1):
         for j in range(cons.original_image.w - cons.block_x + 1):
             # print(f'{i}, {j}')
@@ -396,20 +412,30 @@ def main(args):
 
     cons.display_blocks_list()
     i = 0
-    while i < 20:
+    highest_counter = -1
+
+    tmp_gif = []
+    tmp_img = None
+
+    while i < 100:
         cons.gif_array = []
 
-        new_image = cons.create_new_image((8,8))
+        new_image = cons.create_new_image((50, 50))
 
-        if cons.gif_array:
-            cons.gif_array[0].save('process.gif', format='GIF', append_images=cons.gif_array[1:], save_all=True, duration=100, loop=0)
+        if isinstance(new_image, int):
+            if new_image > highest_counter:
+                highest_counter = new_image
+                tmp_gif = cons.gif_array
+                tmp_img = cons.new_image
 
-        if new_image:
+        elif isinstance(new_image, np.array):
             break
+
         i += 1
 
-    Image.fromarray(cons.new_image.astype(np.uint8)).show()
-    Image.fromarray(cons.new_image.astype(np.uint8)).save("final.png", "PNG")
+    Image.fromarray(tmp_img.astype(np.uint8)).show()
+    Image.fromarray(tmp_img.astype(np.uint8)).save("best.png", "PNG")
+    tmp_gif[0].save('best_process.gif', format='GIF', append_images=tmp_gif[1:], save_all=True, duration=500, loop=0)
     #img = Image.fromarray(np.array(new_img))
 
 if __name__ == '__main__':
