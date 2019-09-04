@@ -213,7 +213,6 @@ class Constraints:
         row_col = rn.choice(entropy_and_position['position'])
 
         print(f"entropy: {entropy_and_position['entropy']}\nrow_col: {row_col}\nnumber of candidates: {len(entropy_and_position['position'])}")
-        breakpoint()
 
         return row_col
 
@@ -341,7 +340,7 @@ class Constraints:
 
             else:
                 last_chosen_cell = chosen_cell
-                #TODo: compute probabilities of neighbors (current weights value does nothing...)
+                #TODO: compute probabilities of neighbors (current weights value does nothing...)
                 chosen_cell = rn.choices(population=possibilities_array[row_col[0]][row_col[1]],
                                         weights=[x.probability for x in possibilities_array[row_col[0]][row_col[1]]],
                                         k=1)[0]
