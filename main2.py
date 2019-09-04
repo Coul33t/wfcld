@@ -188,8 +188,11 @@ class Constraints:
             become the new lowest entropy cell. If it's the same value, there's
             a 50% chance that the current cell become the new lowest entropy cell.
         """
-        row_col = (-1, -1)
-        lowest_entropy = 9999999
+        # It stores the lowest entropy and all the cells that match this value.
+        # It used to be
+        #   if current_entropy < lowest_entropy: 50% to take the current cell
+        # But this code would actually hugely favours the last cells of the array
+        entropy_and_position = {'entropy': 9999999, 'position': [(-1, -1)]}
 
         for i in range(len(possibilities_array)):
             for j in range(len(possibilities_array[i])):
@@ -200,13 +203,17 @@ class Constraints:
                 # current_entropy = self.compute_entropy(i, j, possibilities_array)
                 current_entropy = len(possibilities_array[i][j])
 
-                if current_entropy < lowest_entropy:
-                    lowest_entropy = current_entropy
-                    row_col = (i, j)
+                if current_entropy < entropy_and_position['entropy']:
+                    entropy_and_position['entropy'] = current_entropy
+                    entropy_and_position['position'] = [(i, j)]
 
-                if current_entropy == lowest_entropy:
-                    if rn.random() > 0.5:
-                        row_col = (i, j)
+                if current_entropy == entropy_and_position['entropy']:
+                    entropy_and_position['position'].append((i, j))
+
+        row_col = rn.choice(entropy_and_position['position'])
+
+        print(f"entropy: {entropy_and_position['entropy']}\nrow_col: {row_col}\nnumber of candidates: {len(entropy_and_position['position'])}")
+        breakpoint()
 
         return row_col
 
@@ -245,8 +252,8 @@ class Constraints:
             list of the current cell. If a contradiction is reached, it returns
             False.
         """
-        x = row_col[0]
-        y = row_col[1]
+        x = row_col[1]
+        y = row_col[0]
 
         if self.debug:
             print('-----------\nPropagation\n-----------')
@@ -316,40 +323,48 @@ class Constraints:
         self.new_image = np.full(shape=(output_size[0], output_size[1], 3), fill_value=[255,0,128])
         counter = 0
 
+        last_chosen_cell = None
+
         while True:
             counter += 1
             if self.debug:
                 print(f'Processing tile number {counter}')
+
             # Get the top-left coordinates of the block with the lowest entropy
             row_col = self.select_lower_entropy(possibilities_array)
             if self.debug:
                 print(f'Row/Col = {row_col}')
 
             # Collapse (choose a value for this block)
-            chosen_cell = rn.choices(population=possibilities_array[row_col[0]][row_col[1]],
-                                    weights=[x.probability for x in possibilities_array[row_col[0]][row_col[1]]])[0]
+            if counter == 1:
+                chosen_cell = rn.choices(population=possibilities_array[row_col[0]][row_col[1]], k=1)[0]
+
+            else:
+                last_chosen_cell = chosen_cell
+                #TODo: compute probabilities of neighbors (current weights value does nothing...)
+                chosen_cell = rn.choices(population=possibilities_array[row_col[0]][row_col[1]],
+                                        weights=[x.probability for x in possibilities_array[row_col[0]][row_col[1]]],
+                                        k=1)[0]
+
 
             if self.debug:
                 print(f'Chosen cell: {chosen_cell.value}')
 
             # Put this block into the new image
             self.new_image[row_col[0]*self.block_x:row_col[0]*self.block_x+self.block_x,
-                           row_col[1]*self.block_y:row_col[1]*self.block_y+self.block_y] = chosen_cell.value
+                        row_col[1]*self.block_y:row_col[1]*self.block_y+self.block_y] = chosen_cell.value
 
             possibilities_array[row_col[0]][row_col[1]] = 'COLLAPSED'
             self.export_tmp_image(self.new_image, counter - 1)
 
             if all(x == 'COLLAPSED' for x in itertools.chain(*possibilities_array)):
                 print('Done!')
-                break
+                return 'Done'
 
             # Unlucky boi
             if not self.propagate(chosen_cell, row_col, possibilities_array):
                 print('Contradiction reached: aborted.')
                 return counter
-
-
-        return True
 
     def export_tmp_image(self, img, idx):
         for r, row in enumerate(img):
@@ -417,10 +432,10 @@ def main(args):
     tmp_gif = []
     tmp_img = None
 
-    while i < 100:
+    while i < 10:
         cons.gif_array = []
 
-        new_image = cons.create_new_image((50, 50))
+        new_image = cons.create_new_image((40, 40))
 
         if isinstance(new_image, int):
             if new_image > highest_counter:
@@ -428,14 +443,19 @@ def main(args):
                 tmp_gif = cons.gif_array
                 tmp_img = cons.new_image
 
-        elif isinstance(new_image, np.array):
+        elif new_image == 'Done':
             break
 
         i += 1
 
-    Image.fromarray(tmp_img.astype(np.uint8)).show()
-    Image.fromarray(tmp_img.astype(np.uint8)).save("best.png", "PNG")
-    tmp_gif[0].save('best_process.gif', format='GIF', append_images=tmp_gif[1:], save_all=True, duration=500, loop=0)
+    if new_image == 'Done':
+        Image.fromarray(cons.new_image.astype(np.uint8)).show()
+        Image.fromarray(cons.new_image.astype(np.uint8)).save("final.png", "PNG")
+        cons.gif_array[0].save('final_process.gif', format='GIF', append_images=cons.gif_array[1:], save_all=True, duration=500, loop=0)
+    else:
+        Image.fromarray(tmp_img.astype(np.uint8)).show()
+        Image.fromarray(tmp_img.astype(np.uint8)).save("best.png", "PNG")
+        tmp_gif[0].save('best_process.gif', format='GIF', append_images=tmp_gif[1:], save_all=True, duration=500, loop=0)
     #img = Image.fromarray(np.array(new_img))
 
 if __name__ == '__main__':
