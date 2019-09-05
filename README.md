@@ -21,7 +21,7 @@ Wavefunction collapsing, yay!
 
 Be aware that the quality of the GIF and the video isn't great at all for small images.
 _________________________________________________________________________________
-## Todo:
+### Todo:
 * Test if it's really working (update: maybe it actually works?)
 * Check why there are a lot of contradictions (maybe related to the next point)
 * Check why the array seems to be cyclic (look into entropy computation)
