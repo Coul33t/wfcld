@@ -10,7 +10,7 @@ Todo:
 
 Done:
 * Right entropy computation -> What is right, what is wrong, who am I?
-* Adds probas
+* Add probas
 * 4-connected instead of 8-connected (branch) -> I didn't branch. Woops.
-* Takes N\*N input
+* Take N\*N input -> Now taking NxM input
 * Extensive testing of the submatrix matching algorithm (there's probably a problem coming from here)
