@@ -1,8 +1,20 @@
-import numpy as np
-from PIL import Image
+# --------------
+# PYTHON IMPORTS
+# --------------
 import random as rn
 import itertools
 import argparse
+# --------------
+
+# ---------------
+# LIBRARY IMPORTS
+# ---------------
+import numpy as np
+from PIL import Image
+# Used to export the process to a video file
+# (GIF compress too much for small images)
+import cv2
+# ---------------
 
 offsets = {'top': (0, -1),
            'right': (1, 0),
@@ -14,6 +26,8 @@ def parse_args():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("-d", "--debug", help="Toggle debug mode Debug mode", action='store_true')
+    parser.add_argument("-v", "--video", help="Export the creation process to a video file", action='store_true')
+    parser.add_argument("-g", "--gif", help="Export the creation process to a gif file", action='store_true')
     args = parser.parse_args()
 
     return args
@@ -369,7 +383,7 @@ class Constraints:
             for c, col in enumerate(row):
                 if np.array_equal(col, [-1,-1,-1]):
                     img[r][c] = [255,0,128]
-        self.gif_array.append(Image.fromarray(img.astype(np.uint8)))
+        self.gif_array.append(img)
 
     def display_blocks_list(self):
         print(f'Images to display: {len(self.blocks_list)}')
@@ -411,6 +425,28 @@ class Constraints:
     #     img = Image.fromarray(all_blocks)
     #     img.show()
 
+    def to_video(self, gif=None):
+        final_gif_array = self.gif_array
+        if gif:
+            gif_array = gif
+
+        fps = 2
+        size = (self.new_image.shape[0], self.new_image.shape[1])
+        out = cv2.VideoWriter('final_process.avi', cv2.VideoWriter_fourcc(*'DIVX'), fps, size)
+
+        for img in final_gif_array:
+            out.write(img.astype(np.ubyte))
+        out.release()
+
+    def to_gif(self, gif=None):
+        final_gif_array = self.gif_array
+        if gif:
+            final_gif_array = gif
+
+        for i, _ in enumerate(final_gif_array):
+            final_gif_array[i] = Image.fromarray(final_gif_array[i].astype(np.uint8))
+
+        final_gif_array[0].save('final_process.gif', format='GIF', append_images=final_gif_array[1:], save_all=True, duration=500, loop=0)
 
 def main(args):
     print('Importing image')
@@ -451,12 +487,17 @@ def main(args):
     if new_image == 'Done':
         Image.fromarray(cons.new_image.astype(np.uint8)).show()
         Image.fromarray(cons.new_image.astype(np.uint8)).save("final.png", "PNG")
-        cons.gif_array[0].save('final_process.gif', format='GIF', append_images=cons.gif_array[1:], save_all=True, duration=500, loop=0)
+        if args.video:
+            cons.to_video()
+        if args.gif:
+            cons.to_gif()
     else:
         Image.fromarray(tmp_img.astype(np.uint8)).show()
         Image.fromarray(tmp_img.astype(np.uint8)).save("best.png", "PNG")
-        tmp_gif[0].save('best_process.gif', format='GIF', append_images=tmp_gif[1:], save_all=True, duration=500, loop=0)
-    #img = Image.fromarray(np.array(new_img))
+        if args.video:
+            cons.to_video(tmp_gif)
+        if args.gif:
+            cons.to_gif(tmp_gif)
 
 if __name__ == '__main__':
     args = parse_args()
