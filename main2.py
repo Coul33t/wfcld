@@ -108,12 +108,11 @@ class Constraints:
                         except StopIteration:
                             block_in_list.neighbors[n_direction].append(n_value)
 
-        self.frequencies_to_probabilities()
 
 
     def get_neighbors(self, i, j) -> dict:
         """
-            This method returns a neighbors dictionnary, from a set of
+            This method returns a dictionnary of neighbors, from a set of
             coordinates (the N and M values are stored into the class, so there's
             no need to pass them to this function).
         """
@@ -212,7 +211,7 @@ class Constraints:
 
         row_col = rn.choice(entropy_and_position['position'])
 
-        print(f"entropy: {entropy_and_position['entropy']}\nrow_col: {row_col}\nnumber of candidates: {len(entropy_and_position['position'])}")
+        # print(f"entropy: {entropy_and_position['entropy']}\nrow_col: {row_col}\nnumber of candidates: {len(entropy_and_position['position'])}")
 
         return row_col
 
@@ -416,7 +415,7 @@ class Constraints:
 def main(args):
     print('Importing image')
 
-    cons = Constraints(2, 2, path_to_img="test_images/subtest1.png", debug=args.debug)
+    cons = Constraints(4, 4, path_to_img="test_images/subtest1.png", debug=args.debug)
 
     print('Building constraints')
     for i in range(cons.original_image.h - cons.block_y + 1):
@@ -425,6 +424,8 @@ def main(args):
             cons.add_block(i, j)
 
     cons.display_blocks_list()
+
+    cons.frequencies_to_probabilities()
     i = 0
     highest_counter = -1
 
