@@ -277,9 +277,12 @@ class Constraints:
             new_x = x + offsets[k][0]
             new_y = y + offsets[k][1]
 
+            # -1 is a valid index in a Python list...
             if (v != []
             and new_x < len(possibilities_array)
             and new_y < len(possibilities_array[0])
+            and new_x > 0
+            and new_y > 0
             and possibilities_array[new_y][new_x] != "COLLAPSED"):
 
                 legal_blocks = []
@@ -367,7 +370,7 @@ class Constraints:
                         row_col[1]*self.block_y:row_col[1]*self.block_y+self.block_y] = chosen_cell.value
 
             possibilities_array[row_col[0]][row_col[1]] = 'COLLAPSED'
-            self.export_tmp_image(self.new_image, counter - 1)
+            self.gif_array.append(np.copy(self.new_image))
 
             if all(x == 'COLLAPSED' for x in itertools.chain(*possibilities_array)):
                 print('Done!')
@@ -378,12 +381,6 @@ class Constraints:
                 print('Contradiction reached: aborted.')
                 return counter
 
-    def export_tmp_image(self, img, idx):
-        for r, row in enumerate(img):
-            for c, col in enumerate(row):
-                if np.array_equal(col, [-1,-1,-1]):
-                    img[r][c] = [255,0,128]
-        self.gif_array.append(img)
 
     def display_blocks_list(self):
         print(f'Images to display: {len(self.blocks_list)}')
@@ -428,7 +425,7 @@ class Constraints:
     def to_video(self, gif=None):
         final_gif_array = self.gif_array
         if gif:
-            gif_array = gif
+            final_gif_array = gif
 
         fps = 2
         size = (self.new_image.shape[0], self.new_image.shape[1])
