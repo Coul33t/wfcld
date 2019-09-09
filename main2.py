@@ -4,6 +4,7 @@
 import random as rn
 import itertools
 import argparse
+from enum import auto, Enum
 # --------------
 
 # ---------------
@@ -52,8 +53,7 @@ class Block:
         A NxM block in the image. This class is used to store all the possible
         NxM blocks contained into the original image, and also the neighbors
         (Nx1 for the top and bottom neighbors, 1xM for the left and right ones).
-        It also stores the neighbors themselves, the frequency of this block
-        and the probability (converted frequency so that sum(all_blocks_probabilities) = 1).
+        It also stores the neighbors themselves and the frequency of this block.
     """
     def __init__(self, value):
         self.value = value
@@ -61,7 +61,32 @@ class Block:
         self.h = len(value)
         self.neighbors = {'top': [], 'right': [], 'bottom': [], 'left': []}
         self.frequency = 1
-        self.probability = -1
+        self.is_border =  {'top-left': 0,
+                           'top-right': 0,
+                           'bottom-right': 0,
+                           'bottom-left':0,
+                           'top': 0,
+                           'right': 0,
+                           'bottom': 0,
+                           'left': 0}
+
+    def set_border(self, i, j, b_x, b_y, w, h):
+        if i == 0 and j == 0:
+            self.is_border['top-left'] = 1
+        elif i == 0 and j == w-b_x:
+            self.is_border['top-right'] = 1
+        elif i == h-b_y and j == w-b_x:
+            self.is_border['bottom-right'] = 1
+        elif i == 0 and j == w-b_x:
+            self.is_border['bottom-left'] = 1
+        elif i == 0:
+            self.is_border['top'] = 1
+        elif j == 0:
+            self.is_border['right'] = 1
+        elif i == h-b_y:
+            self.is_border['bottom'] = 1
+        elif j == w-b_x:
+            self.is_border['left'] = 1
 
 
 
@@ -73,6 +98,8 @@ class Constraints:
         of methods to compute everything needed for wave-function collapsing.
     """
     def __init__(self, block_x_size, block_y_size, path_to_img=None, img=None, debug=False):
+        self.path = '/'.join(path_to_img.split('/')[0:-1])
+        self.image_name = path_to_img.split('/')[-1].split('.')[0]
         self.original_image = MyImage(path_to_img, img)
         self.block_x = block_x_size
         self.block_y = block_y_size
@@ -92,7 +119,10 @@ class Constraints:
         # j = col
         # TODO: change the i,j / x,y notation to avoid further errors
         # Get the block
+
         block = Block(self.original_image.img[i:i+self.block_y, j:j+self.block_x])
+
+        block.set_border(i, j, self.block_x, self.block_y, self.original_image.w, self.original_image.h)
         # Get its neigbhors
         neighbors = self.get_neighbors(i, j)
         # print(neighbors)
@@ -150,26 +180,8 @@ class Constraints:
 
         return neighbors_dict
 
-    def frequencies_to_probabilities(self):
-        """
-            Tranforms the frequencies of the different blocks into probabilities,
-            such as sum(all_blocks_probabilities) = 1.
-        """
-        for current_block in self.blocks_list:
-            for _, n_block_list in current_block.neighbors.items():
 
-                cum_sum = 0
-                for n_block in n_block_list:
-                    cum_sum += n_block.frequency
-
-                if cum_sum == 0:
-                    cum_sum = 1
-
-                else:
-                    for n_block in n_block_list:
-                        n_block.probability = n_block.frequency / cum_sum
-
-    def compute_entropy(self, i, j, possibilities_array):
+    def compute_entropy(self, i, j, possibilities_array) -> float:
         """
             CURRENTLY UNUSED (because it makes the algorithm systematically
             select the corners first, then the borders, etc.)
@@ -194,7 +206,7 @@ class Constraints:
             entropy += len(possibilities_array[i][j+1])
         return entropy
 
-    def select_lower_entropy(self, possibilities_array):
+    def select_lower_entropy(self, possibilities_array) -> dict:
         """
             Select the cell with the lowest entropy in the possibilities array.
             If a cell has a lower entropy than the current lowest value, then it
@@ -229,7 +241,7 @@ class Constraints:
 
         return row_col
 
-    def compare_matrix_to_submatrix(self, direction, matrix, submatrix):
+    def compare_matrix_to_submatrix(self, direction, matrix, submatrix) -> bool:
         # if self.debug:
         #     print('new matrixes to test')
         #     print(f'Matrix = {matrix}')
@@ -264,49 +276,140 @@ class Constraints:
             list of the current cell. If a contradiction is reached, it returns
             False.
         """
+        # TODO: probas for the propagated cells
+        # How to : add frequencies
         x = row_col[1]
         y = row_col[0]
 
         if self.debug:
             print('-----------\nPropagation\n-----------')
 
-        total_legal_blocks = []
-
         for k, v in chosen_cell.neighbors.items():
 
             new_x = x + offsets[k][0]
             new_y = y + offsets[k][1]
 
+            if self.debug:
+                print(f'{k} at {new_x} {new_y}')
+
             # -1 is a valid index in a Python list...
             if (v != []
             and new_x < len(possibilities_array)
             and new_y < len(possibilities_array[0])
-            and new_x > 0
-            and new_y > 0
+            and new_x >= 0
+            and new_y >= 0
             and possibilities_array[new_y][new_x] != "COLLAPSED"):
 
-                legal_blocks = []
-                for possible_block in possibilities_array[new_y][new_x]:
+                to_delete = []
+
+                has_legal_block = False
+                for i, possible_block in enumerate(possibilities_array[new_y][new_x]):
+                    has_one_match = False
                     for neigh in v:
                         if self.compare_matrix_to_submatrix(k, possible_block.value, neigh.value):
-                            legal_blocks.append(possible_block)
+                            possible_block.frequency += 1
+                            has_legal_block = True
+                            has_one_match = True
 
-                    # if compare_matrix_to_submatrix(k, , v[0].value, possible_block.value):
-                    #     legal_blocks.append(possible_block)
+                    if not has_one_match:
+                        to_delete.append(i)
 
-                if self.debug:
-                    print(f'Legal blocks number for {k}: {len(legal_blocks)}')
-
-                if not legal_blocks:
+                if not has_legal_block:
+                    if self.debug:
+                        print(f'Contradiction at {new_y} {new_x}')
+                        print(f'Original block at {row_col[1]} {row_col[0]}')
+                        print(f'Original block value: {chosen_cell.value}')
                     return False
 
-                total_legal_blocks.extend(legal_blocks)
+                to_delete.sort(reverse=True)
 
-                possibilities_array[new_y][new_x] = legal_blocks
+                for i in to_delete:
+                    del possibilities_array[new_y][new_x][i]
 
-        if not total_legal_blocks:
-            return False
+            else:
+                if self.debug:
+                    print(f'{new_x} < {len(possibilities_array)} (nb cols): {new_x < len(possibilities_array)}')
+                    print(f'{new_y} < {len(possibilities_array[0])} (nb rows): {new_y < len(possibilities_array[0])}')
+                    print(f'{new_x} > 0: {new_x > 0}')
+                    print(f'{new_y} > 0: {new_y > 0}')
+                    if (0 <= new_x < len(possibilities_array)) and (0 <= new_y < len(possibilities_array[0])):
+                            print(f'{possibilities_array[new_y][new_x]} is not collapsed: {possibilities_array[new_y][new_x] != "COLLAPSED"}')
+
         return True
+
+    def compute_corner_possibilities(self, direction, possibilities_array):
+        row = None
+        col = None
+
+        if 'top' in direction:
+            row = 0
+        if 'bottom' in direction:
+            row = -1
+        if 'left' in direction:
+            col = 0
+        if 'right' in direction:
+            col = -1
+
+        to_delete = []
+
+        for i, block in enumerate(possibilities_array[row][col]):
+            if block.is_border[direction] == 0:
+                to_delete.append(i)
+
+        to_delete.sort(reverse=True)
+        for idx in to_delete:
+            del possibilities_array[row][col][idx]
+
+
+
+    def compute_border_possibilities(self, possibilities_array):
+        # Start with corners
+        # TODO: bug somewhere around here
+        self.compute_corner_possibilities('top-left', possibilities_array)
+        self.compute_corner_possibilities('top-right', possibilities_array)
+        self.compute_corner_possibilities('bottom-right', possibilities_array)
+        self.compute_corner_possibilities('bottom-left', possibilities_array)
+
+        for i in range(1, len(possibilities_array)-1):
+            to_delete = []
+            for j, block in enumerate(possibilities_array[i][0]):
+                if block.is_border['left'] == 0:
+                    to_delete.append(j)
+
+            to_delete.sort(reverse=True)
+            for idx in to_delete:
+                del possibilities_array[i][0][idx]
+
+            to_delete = []
+            for j, block in enumerate(possibilities_array[i][-1]):
+                if block.is_border['right'] == 0:
+                    to_delete.append(j)
+
+            to_delete.sort(reverse=True)
+            for idx in to_delete:
+                del possibilities_array[i][-1][idx]
+
+        for j in range(1, len(possibilities_array[0])-1):
+            to_delete = []
+            for i, block in enumerate(possibilities_array[0][j]):
+                if block.is_border['top'] == 0:
+                    to_delete.append(i)
+
+            to_delete.sort(reverse=True)
+            for idx in to_delete:
+                del possibilities_array[0][j][idx]
+
+            to_delete = []
+            for i, block in enumerate(possibilities_array[-1][j]):
+                if block.is_border['bottom'] == 0:
+                    to_delete.append(i)
+
+            to_delete.sort(reverse=True)
+            for idx in to_delete:
+                del possibilities_array[-1][j][idx]
+
+
+
 
     def create_new_image(self, output_size):
         """
@@ -329,7 +432,7 @@ class Constraints:
         # A list containing all the possibles values for each block. Each processed
         # tiles get replaced by "COLLAPSED" in this array
         # TODO: numpy array to be consistent for accessing values?
-        possibilities_array = [[self.blocks_list for x in range(int(output_size[1] / self.block_y))] for y in range(int(output_size[0] / self.block_x))]
+        possibilities_array = [[self.blocks_list.copy() for x in range(int(output_size[1] / self.block_y))] for y in range(int(output_size[0] / self.block_x))]
         # Initialise a new matrix: N*ixM*jx3 (3 = RGB)
         # WARNING: this numpy array does not have the same size as the
         # possibilities_array:
@@ -338,6 +441,10 @@ class Constraints:
         self.new_image = np.full(shape=(output_size[0], output_size[1], 3), fill_value=[255,0,128])
         counter = 0
 
+        #TODO: first pass of possible values for border
+        self.compute_border_possibilities(possibilities_array)
+
+        chosen_cell = None
         last_chosen_cell = None
 
         while True:
@@ -347,19 +454,19 @@ class Constraints:
 
             # Get the top-left coordinates of the block with the lowest entropy
             row_col = self.select_lower_entropy(possibilities_array)
+            breakpoint()
             if self.debug:
                 print(f'Row/Col = {row_col}')
 
             # Collapse (choose a value for this block)
-            if counter == 1:
-                chosen_cell = rn.choices(population=possibilities_array[row_col[0]][row_col[1]], k=1)[0]
+            last_chosen_cell = chosen_cell
 
-            else:
-                last_chosen_cell = chosen_cell
-                #TODO: compute probabilities of neighbors (current weights value does nothing...)
-                chosen_cell = rn.choices(population=possibilities_array[row_col[0]][row_col[1]],
-                                        weights=[x.probability for x in possibilities_array[row_col[0]][row_col[1]]],
-                                        k=1)[0]
+            #TODO: compute probabilities of neighbors (current weights value does nothing...)
+            # See the collapse function for this
+            breakpoint()
+            chosen_cell = rn.choices(population=possibilities_array[row_col[0]][row_col[1]],
+                                    weights=[x.frequency for x in possibilities_array[row_col[0]][row_col[1]]],
+                                    k=1)[0]
 
 
             if self.debug:
@@ -379,8 +486,10 @@ class Constraints:
             # Unlucky boi
             if not self.propagate(chosen_cell, row_col, possibilities_array):
                 print('Contradiction reached: aborted.')
+                if self.debug:
+                    Image.fromarray(self.new_image.astype(np.uint8)).show()
+                    breakpoint()
                 return counter
-
 
     def display_blocks_list(self):
         print(f'Images to display: {len(self.blocks_list)}')
@@ -394,7 +503,9 @@ class Constraints:
                 all_blocks = np.concatenate((all_blocks, block.value), axis=1)
 
         img = Image.fromarray(all_blocks)
-        img.save("all_blocks.png", "PNG")
+        final_name = 'all_blocks_' + self.image_name + '.png'
+        img.save(final_name, "PNG")
+
 
     # def display_blocks_and_prob(self):
     #     all_blocks = None
@@ -448,17 +559,15 @@ class Constraints:
 def main(args):
     print('Importing image')
 
-    cons = Constraints(4, 4, path_to_img="test_images/subtest1.png", debug=args.debug)
+    cons = Constraints(4, 4, path_to_img="test_images/subtest2.png", debug=args.debug)
 
     print('Building constraints')
     for i in range(cons.original_image.h - cons.block_y + 1):
         for j in range(cons.original_image.w - cons.block_x + 1):
-            # print(f'{i}, {j}')
             cons.add_block(i, j)
 
     cons.display_blocks_list()
 
-    cons.frequencies_to_probabilities()
     i = 0
     highest_counter = -1
 
@@ -468,9 +577,10 @@ def main(args):
     while i < 10:
         cons.gif_array = []
 
-        new_image = cons.create_new_image((40, 40))
+        new_image = cons.create_new_image((20, 20))
 
         if isinstance(new_image, int):
+            print(f'Number of iterations: {new_image}')
             if new_image > highest_counter:
                 highest_counter = new_image
                 tmp_gif = cons.gif_array
