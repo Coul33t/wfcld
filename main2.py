@@ -64,7 +64,7 @@ class Block:
         self.is_border =  {'top-left': 0,
                            'top-right': 0,
                            'bottom-right': 0,
-                           'bottom-left':0,
+                           'bottom-left': 0,
                            'top': 0,
                            'right': 0,
                            'bottom': 0,
@@ -77,7 +77,7 @@ class Block:
             self.is_border['top-right'] = 1
         elif i == h-b_y and j == w-b_x:
             self.is_border['bottom-right'] = 1
-        elif i == 0 and j == w-b_x:
+        elif i == h-b_y and j == 0:
             self.is_border['bottom-left'] = 1
         elif i == 0:
             self.is_border['top'] = 1
@@ -125,7 +125,6 @@ class Constraints:
         block.set_border(i, j, self.block_x, self.block_y, self.original_image.w, self.original_image.h)
         # Get its neigbhors
         neighbors = self.get_neighbors(i, j)
-        # print(neighbors)
 
         # If the block doesn't exist in the list, add it
         if not any([np.array_equal(block.value, x.value) for x in self.blocks_list]):
@@ -137,6 +136,12 @@ class Constraints:
         # Else, find it in the list
         else:
             block_in_list = [x for x in self.blocks_list if np.array_equal(block.value, x.value)][0]
+
+            # adds the values of the dictionnary key-wise
+            # (https://stackoverflow.com/questions/45713887/add-values-from-two-dictionaries)
+            block_in_list.is_border = {key: block_in_list.is_border.get(key, 0) + block.is_border.get(key, 0)
+                                       for key in set(block_in_list.is_border) | set(block.is_border)}
+            breakpoint()
             # Then, for each direction, check if the neighbors exist or not
             for n_direction, n_value in neighbors.items():
                 if n_value != []:
@@ -151,8 +156,6 @@ class Constraints:
                         # If we didn't find it, we just add this new block
                         except StopIteration:
                             block_in_list.neighbors[n_direction].append(n_value)
-
-
 
     def get_neighbors(self, i, j) -> dict:
         """
@@ -357,6 +360,7 @@ class Constraints:
                 to_delete.append(i)
 
         to_delete.sort(reverse=True)
+
         for idx in to_delete:
             del possibilities_array[row][col][idx]
 
@@ -377,6 +381,7 @@ class Constraints:
                     to_delete.append(j)
 
             to_delete.sort(reverse=True)
+
             for idx in to_delete:
                 del possibilities_array[i][0][idx]
 
@@ -388,6 +393,7 @@ class Constraints:
             to_delete.sort(reverse=True)
             for idx in to_delete:
                 del possibilities_array[i][-1][idx]
+
 
         for j in range(1, len(possibilities_array[0])-1):
             to_delete = []
@@ -454,7 +460,7 @@ class Constraints:
 
             # Get the top-left coordinates of the block with the lowest entropy
             row_col = self.select_lower_entropy(possibilities_array)
-            breakpoint()
+
             if self.debug:
                 print(f'Row/Col = {row_col}')
 
@@ -463,7 +469,6 @@ class Constraints:
 
             #TODO: compute probabilities of neighbors (current weights value does nothing...)
             # See the collapse function for this
-            breakpoint()
             chosen_cell = rn.choices(population=possibilities_array[row_col[0]][row_col[1]],
                                     weights=[x.frequency for x in possibilities_array[row_col[0]][row_col[1]]],
                                     k=1)[0]
@@ -559,7 +564,7 @@ class Constraints:
 def main(args):
     print('Importing image')
 
-    cons = Constraints(4, 4, path_to_img="test_images/subtest2.png", debug=args.debug)
+    cons = Constraints(8, 8, path_to_img="test_images/subtest2.png", debug=args.debug)
 
     print('Building constraints')
     for i in range(cons.original_image.h - cons.block_y + 1):
@@ -577,7 +582,7 @@ def main(args):
     while i < 10:
         cons.gif_array = []
 
-        new_image = cons.create_new_image((20, 20))
+        new_image = cons.create_new_image((40, 40))
 
         if isinstance(new_image, int):
             print(f'Number of iterations: {new_image}')
