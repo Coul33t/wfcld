@@ -141,7 +141,7 @@ class Constraints:
             # (https://stackoverflow.com/questions/45713887/add-values-from-two-dictionaries)
             block_in_list.is_border = {key: block_in_list.is_border.get(key, 0) + block.is_border.get(key, 0)
                                        for key in set(block_in_list.is_border) | set(block.is_border)}
-            breakpoint()
+
             # Then, for each direction, check if the neighbors exist or not
             for n_direction, n_value in neighbors.items():
                 if n_value != []:
@@ -308,20 +308,25 @@ class Constraints:
                 has_legal_block = False
                 for i, possible_block in enumerate(possibilities_array[new_y][new_x]):
                     has_one_match = False
+                    print('begin')
                     for neigh in v:
                         if self.compare_matrix_to_submatrix(k, possible_block.value, neigh.value):
                             possible_block.frequency += 1
+                            print(f'has true for {neigh}')
                             has_legal_block = True
                             has_one_match = True
 
                     if not has_one_match:
                         to_delete.append(i)
+                        breakpoint()
 
                 if not has_legal_block:
                     if self.debug:
                         print(f'Contradiction at {new_y} {new_x}')
                         print(f'Original block at {row_col[1]} {row_col[0]}')
                         print(f'Original block value: {chosen_cell.value}')
+                        print(f'Original block neighbors: {chosen_cell.neighbors}')
+                        breakpoint()
                     return False
 
                 to_delete.sort(reverse=True)
@@ -451,7 +456,6 @@ class Constraints:
         self.compute_border_possibilities(possibilities_array)
 
         chosen_cell = None
-        last_chosen_cell = None
 
         while True:
             counter += 1
@@ -465,14 +469,9 @@ class Constraints:
                 print(f'Row/Col = {row_col}')
 
             # Collapse (choose a value for this block)
-            last_chosen_cell = chosen_cell
-
-            #TODO: compute probabilities of neighbors (current weights value does nothing...)
-            # See the collapse function for this
             chosen_cell = rn.choices(population=possibilities_array[row_col[0]][row_col[1]],
                                     weights=[x.frequency for x in possibilities_array[row_col[0]][row_col[1]]],
                                     k=1)[0]
-
 
             if self.debug:
                 print(f'Chosen cell: {chosen_cell.value}')
